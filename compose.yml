@@ -1,0 +1,12 @@
+services:
+  border-control:
+    build: .
+    image: nibble-border-control
+    restart: unless-stopped
+    # slack tokens, both channel ids, AI_MODEL, and CMD_API_KEY. the api key has to be in .env
+    # here: there is no ~/.commandcode/auth.json inside the container to fall back on.
+    env_file: .env
+    volumes:
+      # interview transcripts outlive the container
+      - ./data:/app/data
+    # no ports: socket mode dials out to slack, nothing listens

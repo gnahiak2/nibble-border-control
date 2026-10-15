@@ -86,6 +86,17 @@ npm run dev        # or: npm run build && npm start
 try the flow with `AI_MOCK=1` first: the interview is scripted and always passes, so you can
 verify the button, the thread, and the invite without spending model calls.
 
+or run it in a container:
+
+```bash
+docker compose up --build -d
+docker compose logs -f
+```
+
+`compose.yml` reads everything from `.env` and mounts `./data`, so interview transcripts survive a
+rebuild. set `CMD_API_KEY` in `.env` for this — the container has no `~/.commandcode/auth.json` to
+fall back on.
+
 ## configuration
 
 | variable | default | what it does |
