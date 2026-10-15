@@ -95,7 +95,8 @@ docker compose logs -f
 
 `compose.yml` reads everything from `.env` and mounts `./data`, so interview transcripts survive a
 rebuild. set `CMD_API_KEY` in `.env` for this — the container has no `~/.commandcode/auth.json` to
-fall back on.
+fall back on. `mkdir -p data` first if you're on linux, so the mounted directory isn't created
+root-owned and the container can't write to it.
 
 ## configuration
 
