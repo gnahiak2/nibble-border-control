@@ -14,6 +14,8 @@ export interface OfficerReply {
 const API_BASE = 'https://api.commandcode.ai/provider/v1';
 const MAX_TOKENS = 1024;
 const DEFAULT_TIMEOUT_MS = 120_000;
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = [500, 2_000];
 
 const VERDICT_RE = /^[ \t]*VERDICT:[ \t]*(\{.+\})[ \t]*$/m;
 
@@ -71,7 +73,23 @@ interface AskOptions {
   timeoutMs?: number;
 }
 
-async function askProvider({
+/** a provider failure, plus whether trying the same request again could plausibly work */
+class ProviderFailure extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+  }
+}
+
+function isRetryable(status: number, detail: string | undefined): boolean {
+  if (status === 429 || status >= 500) return true;
+  // the provider intermittently rejects a perfectly good key with this exact 403
+  return status === 403 && /authentication failed/i.test(detail ?? '');
+}
+
+async function askProviderOnce({
   apiKey,
   model,
   system,
@@ -94,14 +112,15 @@ async function askProvider({
     });
   } catch (err) {
     const reason = (err as Error).name === 'TimeoutError' ? `timed out after ${timeoutMs}ms` : (err as Error).message;
-    throw new Error(`command code provider unreachable: ${reason}`);
+    throw new ProviderFailure(`command code provider unreachable: ${reason}`, true);
   }
 
   const payload: unknown = await response.json().catch(() => undefined);
 
   if (!response.ok) {
     const detail = providerError(payload);
-    throw new Error(`command code provider returned ${response.status}${detail ? ` (${detail})` : ''}`);
+    const message = `command code provider returned ${response.status}${detail ? ` (${detail})` : ''}`;
+    throw new ProviderFailure(message, isRetryable(response.status, detail));
   }
 
   const text =
@@ -115,12 +134,30 @@ async function askProvider({
 
   if (!text) {
     const finish = (payload as CompletionsPayload).choices?.[0]?.finish_reason;
-    throw new Error(
+    throw new ProviderFailure(
       `command code provider returned no text for ${model}${finish ? ` (finish_reason: ${finish})` : ''}`,
+      false,
     );
   }
 
   return text;
+}
+
+async function askProvider(options: AskOptions): Promise<string> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await askProviderOnce(options);
+    } catch (err) {
+      const failure = err as ProviderFailure;
+      if (!failure.retryable || attempt >= MAX_ATTEMPTS) throw err;
+
+      const delay = RETRY_DELAY_MS[attempt - 1] ?? RETRY_DELAY_MS[RETRY_DELAY_MS.length - 1];
+      console.warn(
+        `officer call failed (attempt ${attempt}/${MAX_ATTEMPTS}): ${failure.message} — retrying in ${delay}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
 
 export interface AiClient {

@@ -252,8 +252,16 @@ async function main(): Promise<void> {
 
   await app.start();
   console.log(
-    `nibble border control is on duty — interviewing with ${config.aiModel}${config.aiMock ? ' (mock interviews)' : ''}`,
+    `nibble border control is on duty — interviewing with ${config.aiModel}` +
+      `${config.aiMock ? ' (mock interviews)' : ` via the command code provider, api key from ${config.apiKeySource}`}`,
   );
+
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.on(signal, () => {
+      console.log(`${signal} received — closing the border`);
+      void app.stop().then(() => process.exit(0));
+    });
+  }
 }
 
 main().catch((err) => {

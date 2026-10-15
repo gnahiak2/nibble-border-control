@@ -1,23 +1,17 @@
-FROM node:20-alpine AS build
-WORKDIR /app
+FROM oven/bun:1-alpine
 
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
-
-FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# deps first, so this layer caches while src changes
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
-COPY --from=build /app/dist ./dist
+COPY src ./src
 
-RUN mkdir -p /app/data && chown -R node:node /app/data
-USER node
+# the container runs as the non-root bun user; seed the data dir with its ownership
+RUN mkdir -p /app/data && chown -R bun:bun /app/data
+USER bun
 
-CMD ["node", "dist/index.js"]
+# bun runs the typescript directly, so there is no build step and no dist/
+CMD ["bun", "src/index.ts"]

@@ -7,6 +7,11 @@ services:
     # here: there is no ~/.commandcode/auth.json inside the container to fall back on.
     env_file: .env
     volumes:
-      # interview transcripts outlive the container
-      - ./data:/app/data
+      # a named volume, not a host bind mount. docker seeds a fresh volume with the image's
+      # directory ownership, so the non-root bun user can always write the interview snapshot.
+      # a bind mount inherits the host directory's uid, and the write fails with EACCES.
+      - border-data:/app/data
     # no ports: socket mode dials out to slack, nothing listens
+
+volumes:
+  border-data:

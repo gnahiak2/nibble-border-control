@@ -39,9 +39,15 @@ export class InterviewStore {
   }
 
   private persist(): void {
-    mkdirSync(dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    writeFileSync(tmp, JSON.stringify([...this.interviews.values()], null, 2));
-    renameSync(tmp, this.file);
+    try {
+      mkdirSync(dirname(this.file), { recursive: true });
+      const tmp = `${this.file}.tmp`;
+      writeFileSync(tmp, JSON.stringify([...this.interviews.values()], null, 2));
+      renameSync(tmp, this.file);
+    } catch (err) {
+      // an unwritable data dir (a ro mount, a uid the container can't write as) must not take
+      // down an interview that is already running in memory — the snapshot is only for restarts
+      console.error(`could not write ${this.file}, interviews continue in memory:`, err);
+    }
   }
 }

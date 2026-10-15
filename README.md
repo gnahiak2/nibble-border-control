@@ -33,7 +33,8 @@ officer decides, ending its reply with:
 
 ## requirements
 
-- node 20+
+- [bun](https://bun.sh) 1.1+ — runs the bot and its typescript directly, no build step. the tests
+  and `typecheck` still use node 20+ and `tsc`
 - a [command code](https://commandcode.ai) account with api access — every plan except Go
   (GOAT, Pro, Max, Team, and Provider). the officer interviews through the
   [provider api](https://commandcode.ai/docs/provider), so no other model key is needed
@@ -79,8 +80,8 @@ left blank, the key stored by `cmd login` in `~/.commandcode/auth.json` is used 
 ### 4. run
 
 ```bash
-npm install
-npm run dev        # or: npm run build && npm start
+bun install
+bun run dev        # or: bun start
 ```
 
 try the flow with `AI_MOCK=1` first: the interview is scripted and always passes, so you can
@@ -93,10 +94,15 @@ docker compose up --build -d
 docker compose logs -f
 ```
 
-`compose.yml` reads everything from `.env` and mounts `./data`, so interview transcripts survive a
-rebuild. set `CMD_API_KEY` in `.env` for this — the container has no `~/.commandcode/auth.json` to
-fall back on. `mkdir -p data` first if you're on linux, so the mounted directory isn't created
-root-owned and the container can't write to it.
+`compose.yml` reads everything from `.env` — set `CMD_API_KEY` there, since the container has no
+`~/.commandcode/auth.json` to fall back on. interviews are snapshotted into a named volume
+(`border-data`), not a host directory: docker seeds a fresh volume with the image's ownership, so
+the non-root `bun` user can always write it, whereas a bind mount inherits the host directory's uid
+and the officer's transcript write fails with `EACCES`. to read the snapshot:
+
+```bash
+docker compose exec border-control cat /app/data/interviews.json
+```
 
 ## configuration
 
@@ -121,6 +127,14 @@ root-owned and the container can't write to it.
   on `/provider/v1/chat/completions`, picked from the model id. the officer's transcript lives in
   the interview record and is replayed in full on each turn, so context survives a restart.
   auth is `Authorization: Bearer <CMD_API_KEY>`.
+- **flaky provider turns**: a turn is retried up to 3 times (0.5s, then 2s) when the failure could
+  plausibly be transient — a network error or timeout, a `429`, a `5xx`, or the `403
+  "Authentication failed"` the provider intermittently returns for a perfectly valid key. errors
+  that will not change on a retry, like `MODEL_NOT_IN_PLAN`, fail immediately. retries are logged
+  with the attempt number.
+- **the transcript snapshot is best-effort**: if `data/interviews.json` can't be written (read-only
+  mount, wrong uid), it logs and carries on. the running interview lives in memory, so an
+  unwritable data dir costs you the restart snapshot, not the conversation.
 - **the verdict**: the officer's prompt requires a final line of
   `VERDICT: {"result": "pass" | "fail", "reason": "…"}`. that line is parsed and stripped; the
   rest is posted to the thread. malformed or missing verdicts are treated as ordinary chatter.
@@ -130,7 +144,7 @@ root-owned and the container can't write to it.
 ## development
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm test            # node --test on the verdict parser + ai client
-npm run build       # compile to dist/
+bun run dev         # bun --watch, restarts on save
+bun run typecheck   # tsc --noEmit
+bun test            # bun's runner, or: bun run test for node --test
 ```

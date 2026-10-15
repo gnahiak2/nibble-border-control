@@ -10,6 +10,7 @@ export interface Config {
   approvedChannelId: string;
   aiModel: string;
   apiKey: string;
+  apiKeySource: string;
   aiMock: boolean;
 }
 
@@ -21,16 +22,16 @@ function required(name: string): string {
   return value;
 }
 
-function commandCodeApiKey(): string {
+function commandCodeApiKey(): { key: string; source: string } {
   const fromEnv = process.env.CMD_API_KEY?.trim();
-  if (fromEnv) return fromEnv;
+  if (fromEnv) return { key: fromEnv, source: 'CMD_API_KEY' };
 
   try {
     const auth = JSON.parse(readFileSync(join(homedir(), '.commandcode', 'auth.json'), 'utf8')) as {
       apiKey?: string;
     };
     const stored = auth.apiKey?.trim();
-    if (stored) return stored;
+    if (stored) return { key: stored, source: '~/.commandcode/auth.json' };
   } catch {
     // fall through to the error below
   }
@@ -40,12 +41,15 @@ function commandCodeApiKey(): string {
   );
 }
 
+const apiKey = commandCodeApiKey();
+
 export const config: Config = {
   slackBotToken: required('SLACK_BOT_TOKEN'),
   slackAppToken: required('SLACK_APP_TOKEN'),
   welcomeChannelId: required('WELCOME_CHANNEL_ID'),
   approvedChannelId: required('APPROVED_CHANNEL_ID'),
   aiModel: process.env.AI_MODEL?.trim() || 'claude-haiku-5-5',
-  apiKey: commandCodeApiKey(),
+  apiKey: apiKey.key,
+  apiKeySource: apiKey.source,
   aiMock: process.env.AI_MOCK?.trim() === '1',
 };

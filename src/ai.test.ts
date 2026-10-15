@@ -155,6 +155,56 @@ test('surfaces the provider error message', async () => {
   }
 });
 
+test('retries the intermittent auth failure the provider returns for a valid key', async () => {
+  const provider = stubProvider([
+    {
+      status: 403,
+      body: {
+        type: 'error',
+        error: { type: 'permission_error', message: 'Authentication failed. Please check your credentials.' },
+      },
+    },
+    { body: { content: [{ type: 'text', text: 'move along.' }] } },
+  ]);
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map((arg) => String(arg)).join(' '));
+  };
+
+  try {
+    const ai = createAiClient({ apiKey: 'test-key', model: 'claude-haiku-5-5' });
+    const opening = await ai.start('tester');
+
+    assert.equal(opening.text, 'move along.');
+    assert.equal(provider.calls.length, 2);
+    assert.ok(warnings.some((line) => line.includes('attempt 1/3')));
+  } finally {
+    console.warn = originalWarn;
+    provider.restore();
+  }
+});
+
+test('does not retry a model the plan does not include', async () => {
+  const provider = stubProvider([
+    {
+      status: 403,
+      body: {
+        type: 'error',
+        error: { type: 'permission_error', message: 'MODEL_NOT_IN_PLAN: Claude Haiku 4.5 available in Pro and above' },
+      },
+    },
+  ]);
+
+  try {
+    const ai = createAiClient({ apiKey: 'test-key', model: 'claude-haiku-4-5-20251001' });
+    await assert.rejects(() => ai.start('tester'), /MODEL_NOT_IN_PLAN/);
+    assert.equal(provider.calls.length, 1);
+  } finally {
+    provider.restore();
+  }
+});
+
 test('throws instead of posting an empty officer reply', async () => {
   const provider = stubProvider([
     { body: { choices: [{ message: { content: '' }, finish_reason: 'length' }] } },
