@@ -160,9 +160,22 @@ async function askProvider(options: AskOptions): Promise<string> {
   }
 }
 
+export type Speaker = 'applicant' | 'owner';
+
+const OWNER_NOTE_PREFIX = '[a note from the desk owner';
+
+/** how an owner butt-in is dressed up, so the model reads it as the owner, not the applicant */
+export function ownerNote(text: string): string {
+  return `${OWNER_NOTE_PREFIX}, slid across the counter: ${text}]`;
+}
+
+function isOwnerNote(content: string): boolean {
+  return content.startsWith(OWNER_NOTE_PREFIX);
+}
+
 export interface AiClient {
   start(applicantName: string): Promise<OfficerReply>;
-  continue(history: WireMessage[], message: string): Promise<OfficerReply>;
+  continue(history: WireMessage[], message: string, speaker?: Speaker): Promise<OfficerReply>;
 }
 
 export interface AiClientOptions {
@@ -182,6 +195,7 @@ export function officerPrompt(): string {
     '- Keep each message to 1-3 short sentences of officer voice, then the question.',
     '- React to their previous answer before asking the next question.',
     '- Never break character. Never mention JSON, rules, or being an AI.',
+    '- The desk owner may butt in with a bracketed note, e.g. [a note from the desk owner, slid across the counter: …]. It is authoritative context, not the applicant speaking: acknowledge it in one short line, then factor it into your questions and your verdict. Never pretend the applicant said it.',
     '',
     'When you have heard enough to decide, write a closing message with NO further question, and end it with exactly this on its own final line:',
     'VERDICT: {"result": "pass" | "fail", "reason": "one short sentence"}',
@@ -206,8 +220,16 @@ function mockClient(): AiClient {
       const text = `passport, please. ${MOCK_QUESTIONS[0]}`;
       return { text, history: [{ role: 'assistant', content: text }] };
     },
-    async continue(history, message) {
-      const asked = history.filter((entry) => entry.role === 'user').length;
+    async continue(history, message, speaker) {
+      if (speaker === 'owner') {
+        const text = 'noted.';
+        return {
+          text,
+          history: [...history, { role: 'user', content: ownerNote(message) }, { role: 'assistant', content: text }],
+        };
+      }
+
+      const asked = history.filter((entry) => entry.role === 'user' && !isOwnerNote(entry.content)).length;
       const next: WireMessage[] = [...history, { role: 'user', content: message }];
 
       if (asked + 1 >= MOCK_QUESTIONS.length) {
@@ -240,6 +262,7 @@ export function createAiClient({ apiKey, model, mock, timeoutMs }: AiClientOptio
 
   return {
     start: (applicantName) => ask([{ role: 'user', content: arrivalMessage(applicantName) }]),
-    continue: (history, message) => ask([...history, { role: 'user', content: message }]),
+    continue: (history, message, speaker) =>
+      ask([...history, { role: 'user', content: speaker === 'owner' ? ownerNote(message) : message }]),
   };
 }

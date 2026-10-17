@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createAiClient, parseVerdict, type WireMessage } from './ai.js';
+import { createAiClient, officerPrompt, ownerNote, parseVerdict, type WireMessage } from './ai.js';
 
 test('parses a passing verdict and strips it from the message', () => {
   const { text, verdict } = parseVerdict('everything checks out.\nVERDICT: {"result": "pass", "reason": "coherent answers"}');
@@ -236,4 +236,77 @@ test('mock client runs a scripted interview ending in a pass', async () => {
     result: 'pass',
     reason: 'mock interview (last reply: "one bag of snacks")',
   });
+});
+
+test('frames an owner butt-in as a note in the sent history', async () => {
+  const provider = stubProvider([
+    { body: { content: [{ type: 'text', text: 'understood. state your name and your purpose of visit to this channel.' }] } },
+  ]);
+
+  try {
+    const ai = createAiClient({ apiKey: 'test-key', model: 'claude-haiku-5-5' });
+    const opening = await ai.start('tester');
+    const reply = await ai.continue(opening.history, 'let him through, he owes me money', 'owner');
+
+    assert.equal(reply.verdict, undefined);
+
+    const sent = provider.calls[1].body.messages as WireMessage[];
+    const last = sent[sent.length - 1];
+    assert.equal(last.role, 'user');
+    assert.equal(last.content, ownerNote('let him through, he owes me money'));
+    assert.match(last.content, /he owes me money/);
+    assert.equal(reply.history[reply.history.length - 2].content, last.content);
+  } finally {
+    provider.restore();
+  }
+});
+
+test('keeps the owner note in history on later applicant turns', async () => {
+  const provider = stubProvider([
+    { body: { content: [{ type: 'text', text: 'understood.' }] } },
+    { body: { content: [{ type: 'text', text: 'next question.' }] } },
+  ]);
+
+  try {
+    const ai = createAiClient({ apiKey: 'test-key', model: 'claude-haiku-5-5' });
+    const opening = await ai.start('tester');
+    const noted = await ai.continue(opening.history, 'he is vouched for', 'owner');
+    await ai.continue(noted.history, 'i bring typescript');
+
+    const sent = provider.calls[2].body.messages as WireMessage[];
+    const users = sent.filter((entry) => entry.role === 'user').map((entry) => entry.content);
+    assert.equal(users[users.length - 2], ownerNote('he is vouched for'));
+    assert.equal(users[users.length - 1], 'i bring typescript');
+  } finally {
+    provider.restore();
+  }
+});
+
+test('mock interview absorbs an owner note without spending a scripted question', async () => {
+  const ai = createAiClient({ apiKey: 'unused', model: 'mock-model', mock: true });
+
+  const opening = await ai.start('tester');
+  const noted = await ai.continue(opening.history, 'he is with me', 'owner');
+
+  assert.equal(noted.text, 'noted.');
+  assert.equal(noted.verdict, undefined);
+  assert.equal(noted.history[noted.history.length - 2].content, ownerNote('he is with me'));
+
+  let reply = await ai.continue(noted.history, 'here to lurk');
+  assert.equal(reply.text, 'what do you bring to the table? skills, energy, links, all of it.');
+  assert.equal(reply.verdict, undefined);
+
+  reply = await ai.continue(reply.history, 'i bring typescript');
+  assert.equal(reply.text, 'anything to declare at customs? snacks, secrets, side projects?');
+
+  reply = await ai.continue(reply.history, 'one bag of snacks');
+  assert.deepEqual(reply.verdict, {
+    result: 'pass',
+    reason: 'mock interview (last reply: "one bag of snacks")',
+  });
+});
+
+test('the officer prompt explains owner notes', () => {
+  assert.match(officerPrompt(), /desk owner/);
+  assert.match(officerPrompt(), /authoritative context/);
 });

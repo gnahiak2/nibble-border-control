@@ -8,6 +8,7 @@ export interface Config {
   slackAppToken: string;
   welcomeChannelId: string;
   approvedChannelId: string;
+  ownerSlackId?: string;
   aiModel: string;
   apiKey: string;
   apiKeySource: string;
@@ -48,6 +49,7 @@ export const config: Config = {
   slackAppToken: required('SLACK_APP_TOKEN'),
   welcomeChannelId: required('WELCOME_CHANNEL_ID'),
   approvedChannelId: required('APPROVED_CHANNEL_ID'),
+  ownerSlackId: process.env.OWNER_SLACK_ID?.trim() || undefined,
   aiModel: process.env.AI_MODEL?.trim() || 'claude-haiku-5-5',
   apiKey: apiKey.key,
   apiKeySource: apiKey.source,

@@ -208,7 +208,10 @@ app.message(async ({ message, client, logger }) => {
   const key = interviewKey(msg.channel, msg.thread_ts);
   const interview = store.get(key);
   if (!interview || interview.status !== 'active') return;
-  if (interview.userId !== msg.user) return;
+
+  const speaker =
+    msg.user === interview.userId ? 'applicant' : msg.user === config.ownerSlackId ? 'owner' : undefined;
+  if (!speaker) return;
 
   const replyText = msg.text;
 
@@ -217,7 +220,7 @@ app.message(async ({ message, client, logger }) => {
     if (!current || current.status !== 'active') return;
 
     try {
-      const reply = await ai.continue(current.history, replyText);
+      const reply = await ai.continue(current.history, replyText, speaker);
       current.history = reply.history;
       current.turns += 1;
       store.set(current);

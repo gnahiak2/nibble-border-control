@@ -28,6 +28,8 @@ officer decides, ending its reply with:
 
 - interviews are keyed per welcome message, so each arrival gets their own thread
 - only the applicant can start their own interview and answer in it
+- the owner (`OWNER_SLACK_ID`) can butt in mid-interview: the note is added to the officer's context
+  and the officer replies to it right away
 - interview state and the full officer transcript are snapshotted to `data/interviews.json`, so a
   bot restart mid-interview doesn't lose the thread
 
@@ -75,7 +77,9 @@ cp .env.example .env
 
 then fill in the tokens, an api key from <https://commandcode.ai/settings/keys>, and both channel
 ids (right-click a channel → **copy link** — the id is the `C…` at the end). if `CMD_API_KEY` is
-left blank, the key stored by `cmd login` in `~/.commandcode/auth.json` is used instead.
+left blank, the key stored by `cmd login` in `~/.commandcode/auth.json` is used instead. set
+`OWNER_SLACK_ID` (optional) to your own user id (right-click a user → **copy link**) if you want to
+butt into live interviews with extra context.
 
 ### 4. run
 
@@ -112,6 +116,7 @@ docker compose exec border-control cat /app/data/interviews.json
 | `SLACK_APP_TOKEN` | — | app-level token (`xapp-…`) with `connections:write`, required |
 | `WELCOME_CHANNEL_ID` | — | channel where arrivals get the welcome message + button, required |
 | `APPROVED_CHANNEL_ID` | — | channel that passers are invited to, required |
+| `OWNER_SLACK_ID` | off | slack user id of the owner allowed to butt into live interviews with context |
 | `AI_MODEL` | `claude-haiku-5-5` | model id for the officer; any id from `https://api.commandcode.ai/provider/v1/models` |
 | `CMD_API_KEY` | from `~/.commandcode/auth.json` | command code api key with provider api access |
 | `AI_MOCK` | off | `1` = scripted interview, no ai calls |
