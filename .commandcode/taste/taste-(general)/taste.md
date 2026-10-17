@@ -1,0 +1,7 @@
+# Taste (general)
+- Plan documents go in `~/.commandcode/plans/` (e.g. `~/.commandcode/plans/<feature>.md`) — not `~/plans/` or any other directory. Confidence: 0.8
+- Wants execution tracked as a checkbox to-do list in a markdown file (e.g. `~/.commandcode/plans/<feature>-todo.md`), created up front and kept updated with `[x]`/`[ ]` as work progresses. Confidence: 0.85
+- Delegates the whole git flow: after checks pass, gives terse one-line go-aheads (e.g. "ok push") and expects the agent to review diffs, stage only the feature files (leaving unrelated/pre-existing changes untouched), write the commit message, and push — without further questions. Confidence: 0.7
+- Approves plan mode with terse, sometimes typo'd, lowercase go-aheads ("ok go", "lk go", "oki go") — treats them as full authorization to execute the whole plan without further check-ins; don't ask for clarification on garbled approvals. Confidence: 0.85
+- This machine has node/npm but not bun (and `NODE_ENV=production`/`omit=dev` prunes devDependencies): run checks directly as `./node_modules/.bin/tsc --noEmit && node --import tsx --test src/*.test.ts`, and install with `npm install --include=dev` when tooling goes missing. Confidence: 0.7
+- Supplies bot character personas as long, highly structured spec documents (identity, voice/format rules, hard rules, canon examples) and expects them applied everywhere the product speaks — model prompts, static UI copy, mock scripts — with the character name swapped to the product's name, and enforced with lock-in tests. Confidence: 0.65

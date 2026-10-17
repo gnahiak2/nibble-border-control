@@ -4,7 +4,8 @@ nibble, but border control.
 
 a slack bot that guards a channel. when someone joins the welcome channel, it posts them a
 welcome message with a button. pressing the button starts an ai immigration interview in that
-message's thread — a deadpan border-control officer who asks a few questions, then decides.
+message's thread — nibble herself, a very small pouty catgirl officer who asks a few questions,
+then decides.
 pass and you get invited to the approved channel. fail and you can reapply.
 
 ## how it works
@@ -123,6 +124,9 @@ docker compose exec border-control cat /app/data/interviews.json
 
 ## notes
 
+- **the persona**: everything the bot says comes out in nibble's voice — lowercase, kaomoji, one
+  thought per line, and a pout that lives here now. the full persona (voice, the 5yo set, the pout
+  scale, the kid rules) lives in `officerPrompt()` in `src/ai.ts`.
 - **the model**: the default officer model is `claude-haiku-5-5`, which needs GOAT or above. the
   older `claude-haiku-4-5-20251001` needs Pro or above and answers `403 MODEL_NOT_IN_PLAN` on
   GOAT, so check your plan before switching.

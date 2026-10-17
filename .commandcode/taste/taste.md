@@ -1,2 +1,2 @@
-# Taste
-See [taste/taste.md](taste/taste.md)
+# Taste (general)
+See [taste-(general)/taste.md](taste-(general)/taste.md)

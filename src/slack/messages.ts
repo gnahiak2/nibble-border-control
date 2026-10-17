@@ -6,14 +6,14 @@ export function welcomeBlocks(userId: string): KnownBlock[] {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `<@${userId}>'s flight just landed! Welcome, <@${userId}>. you've arrived at immigration.`,
+        text: `mrrp? <@${userId}> just landed!!! hi hi,,, :3`,
       },
     },
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: 'before you get anywhere near the good stuff, you need to clear immigration. an officer will interview you right here in this thread. answer honestly — the officer has seen everything.',
+        text: 'okay,,, before you get anywhere near the good stuff you have to clear immigration,,, i’ll interview you right here in this thread :3 answer honestly,,, i have seen everything',
       },
     },
     {
@@ -24,14 +24,14 @@ export function welcomeBlocks(userId: string): KnownBlock[] {
           type: 'button',
           action_id: 'start_interview',
           style: 'primary',
-          text: { type: 'plain_text', text: 'start immigration interview', emoji: true },
+          text: { type: 'plain_text', text: 'start the interview!!! :3', emoji: true },
           value: userId,
         },
       ],
     },
     {
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: 'only the applicant named above may begin this interview.' }],
+      elements: [{ type: 'mrkdwn', text: 'only the person above can press this,,, those are the rules :3' }],
     },
   ];
 }
@@ -42,7 +42,7 @@ export function passBlocks(userId: string, reason: string, approvedChannelId: st
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `:passport_control: *visa granted.* welcome to <#${approvedChannelId}>, <@${userId}>.`,
+        text: `*visa granted!!!* welcome to <#${approvedChannelId}>, <@${userId}> :3`,
       },
     },
     {
@@ -51,7 +51,7 @@ export function passBlocks(userId: string, reason: string, approvedChannelId: st
     },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: `your papers have been filed — you're being admitted to <#${approvedChannelId}>.` },
+      text: { type: 'mrkdwn', text: `papers filed,,, you’re being admitted to <#${approvedChannelId}> now :3` },
     },
   ];
 }
@@ -62,7 +62,7 @@ export function failBlocks(userId: string, reason: string): KnownBlock[] {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `:no_entry: *entry denied.* not this time, <@${userId}>.`,
+        text: `*entry denied :<* not this time, <@${userId}>,,,`,
       },
     },
     {
@@ -71,11 +71,11 @@ export function failBlocks(userId: string, reason: string): KnownBlock[] {
     },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: 'you may press the button above to reapply whenever you like.' },
+      text: { type: 'mrkdwn', text: 'you can press the button above to reapply whenever you like :< ...okay that is enough pout' },
     },
   ];
 }
 
 export function approvedChannelNote(userId: string): string {
-  return `<@${userId}> just cleared immigration and has been admitted. be nice.`;
+  return `hey hey,,, <@${userId}> just cleared immigration and has been admitted!!! be nice to them :3`;
 }

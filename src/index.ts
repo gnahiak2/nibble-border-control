@@ -58,7 +58,7 @@ async function finalize(
     await client.chat.postMessage({
       channel: interview.channelId,
       thread_ts: interview.threadTs,
-      text: `entry denied: ${verdict.reason}`,
+      text: `entry denied,,, ${verdict.reason}`,
       blocks: failBlocks(interview.userId, verdict.reason),
     });
     return;
@@ -110,7 +110,7 @@ app.event('member_joined_channel', async ({ event, client, logger }) => {
 
     await client.chat.postMessage({
       channel: event.channel,
-      text: `welcome, <@${event.user}>. you've arrived at nibble border control.`,
+      text: `hi hi, <@${event.user}> :3 welcome to nibble border control`,
       blocks: welcomeBlocks(event.user),
     });
   } catch (err) {
@@ -131,7 +131,7 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     await client.chat.postEphemeral({
       channel: channelId,
       user: clickerId,
-      text: 'this notice is addressed to someone else. press the button on your own welcome message.',
+      text: 'nya?,,, that button isn’t yours :< press the one on your own welcome message',
     });
     return;
   }
@@ -140,7 +140,7 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     await client.chat.postEphemeral({
       channel: channelId,
       user: clickerId,
-      text: 'you already have an interview in progress. finish that one first.',
+      text: 'hmph,,, you already have an interview going,,, finish that one first :<',
     });
     return;
   }
@@ -149,7 +149,7 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     await client.chat.postEphemeral({
       channel: channelId,
       user: clickerId,
-      text: 'an interview is already underway in this thread.',
+      text: 'mrrp? there’s already an interview happening in here :3',
     });
     return;
   }
@@ -180,13 +180,13 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     logger.error(err);
     interview.status = 'rejected';
     interview.finishedAt = Date.now();
-    interview.verdictReason = 'the officer’s terminal went dark';
+    interview.verdictReason = 'my terminal went dark';
     store.set(interview);
 
     await client.chat.postMessage({
       channel: channelId,
       thread_ts: threadTs,
-      text: 'the officer’s terminal has gone dark. press the button again to reapply.',
+      text: 'nyah,,, my terminal went dark :< press the button again to reapply?',
     });
   }
 });
@@ -239,7 +239,7 @@ app.message(async ({ message, client, logger }) => {
       await client.chat.postMessage({
         channel: current.channelId,
         thread_ts: current.threadTs,
-        text: 'the officer’s terminal flickered. say that again?',
+        text: 'nya?,,, the screen flickered,,, say that again? :<',
       });
     }
   });

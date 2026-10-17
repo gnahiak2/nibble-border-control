@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Shell(node --version)",
-      "Shell(npm:*)"
+      "Shell(./node_modules/.bin/tsc:*)",
+      "Shell(node --import tsx --test src/*.test.ts 2 >& 1)"
     ],
     "deny": [],
     "defaultMode": "default"

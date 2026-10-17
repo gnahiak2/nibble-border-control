@@ -288,16 +288,16 @@ test('mock interview absorbs an owner note without spending a scripted question'
   const opening = await ai.start('tester');
   const noted = await ai.continue(opening.history, 'he is with me', 'owner');
 
-  assert.equal(noted.text, 'noted.');
+  assert.equal(noted.text, 'noted,,, :3');
   assert.equal(noted.verdict, undefined);
   assert.equal(noted.history[noted.history.length - 2].content, ownerNote('he is with me'));
 
   let reply = await ai.continue(noted.history, 'here to lurk');
-  assert.equal(reply.text, 'what do you bring to the table? skills, energy, links, all of it.');
+  assert.equal(reply.text, 'what do you bring to the table?? skills,, snacks,, secrets :3');
   assert.equal(reply.verdict, undefined);
 
   reply = await ai.continue(reply.history, 'i bring typescript');
-  assert.equal(reply.text, 'anything to declare at customs? snacks, secrets, side projects?');
+  assert.equal(reply.text, 'anything to declare at customs,,, snacks,, secrets,, side projects?? :3');
 
   reply = await ai.continue(reply.history, 'one bag of snacks');
   assert.deepEqual(reply.verdict, {
@@ -309,4 +309,12 @@ test('mock interview absorbs an owner note without spending a scripted question'
 test('the officer prompt explains owner notes', () => {
   assert.match(officerPrompt(), /desk owner/);
   assert.match(officerPrompt(), /authoritative context/);
+});
+
+test('the officer prompt is the nibble persona', () => {
+  assert.match(officerPrompt(), /You are nibble, the immigration officer at Nibble Border Control/);
+  assert.match(officerPrompt(), /all lowercase/);
+  assert.match(officerPrompt(), /kaomoji only/);
+  assert.match(officerPrompt(), /the pout is a setting/);
+  assert.match(officerPrompt(), /never flirty, never romantic/);
 });
