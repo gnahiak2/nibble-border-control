@@ -234,7 +234,7 @@ test('mock client runs a scripted interview ending in a pass', async () => {
   reply = await ai.continue(reply.history, 'one bag of snacks');
   assert.deepEqual(reply.verdict, {
     result: 'pass',
-    reason: 'mock interview (last reply: "one bag of snacks")',
+    reason: 'Mock interview (last reply: "one bag of snacks")',
   });
 });
 
@@ -288,21 +288,21 @@ test('mock interview absorbs an owner note without spending a scripted question'
   const opening = await ai.start('tester');
   const noted = await ai.continue(opening.history, 'he is with me', 'owner');
 
-  assert.equal(noted.text, 'noted,,, :3');
+  assert.equal(noted.text, 'Noted. Thank you for the clarification.');
   assert.equal(noted.verdict, undefined);
   assert.equal(noted.history[noted.history.length - 2].content, ownerNote('he is with me'));
 
   let reply = await ai.continue(noted.history, 'here to lurk');
-  assert.equal(reply.text, 'what do you bring to the table?? skills,, snacks,, secrets :3');
+  assert.equal(reply.text, 'What do you bring to this channel? Skills, projects, or otherwise.');
   assert.equal(reply.verdict, undefined);
 
   reply = await ai.continue(reply.history, 'i bring typescript');
-  assert.equal(reply.text, 'anything to declare at customs,,, snacks,, secrets,, side projects?? :3');
+  assert.equal(reply.text, 'Anything to declare at customs? Contraband snacks, side projects, and the like.');
 
   reply = await ai.continue(reply.history, 'one bag of snacks');
   assert.deepEqual(reply.verdict, {
     result: 'pass',
-    reason: 'mock interview (last reply: "one bag of snacks")',
+    reason: 'Mock interview (last reply: "one bag of snacks")',
   });
 });
 
@@ -313,8 +313,143 @@ test('the officer prompt explains owner notes', () => {
 
 test('the officer prompt is the nibble persona', () => {
   assert.match(officerPrompt(), /You are nibble, the immigration officer at Nibble Border Control/);
-  assert.match(officerPrompt(), /all lowercase/);
-  assert.match(officerPrompt(), /kaomoji only/);
-  assert.match(officerPrompt(), /the pout is a setting/);
+  assert.match(officerPrompt(), /no emoji, no kaomoji/);
   assert.match(officerPrompt(), /never flirty, never romantic/);
+  assert.match(officerPrompt(), /That is not a thing this desk does/);
 });
+
+const backupOptions = { apiKey: 'primary-secret', model: 'claude-haiku-5-5', hackclubApiKey: 'backup-secret' };
+
+for (const kind of ['http', 'network', 'timeout', 'invalid-json', 'null', 'wrong-type', 'empty'] as const) {
+  test(`falls back on ${kind} without changing history or leaking diagnostics`, async (t) => {
+    const calls: { url: string; body: any; headers: Headers }[] = [];
+    const warnings: string[] = [];
+    t.mock.method(console, 'warn', (...args: unknown[]) => warnings.push(args.join(' ')));
+    t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)), headers: new Headers(init.headers) });
+      assert.ok(init.signal);
+      if (url.includes('hackclub')) {
+        return Response.json({ choices: [{ message: { content: 'welcome.\nVERDICT: {"result":"pass","reason":"kind"}' } }] });
+      }
+      if (kind === 'network') throw new Error('primary-secret private message');
+      if (kind === 'timeout') {
+        await new Promise((_, reject) => init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true }));
+      }
+      if (kind === 'http') return Response.json({ error: { message: 'primary-secret private message' } }, { status: 400 });
+      if (kind === 'invalid-json') return new Response('not json');
+      if (kind === 'null') return Response.json(null);
+      if (kind === 'wrong-type') return Response.json({ content: 'wrong' });
+      return Response.json({ content: [] });
+    });
+    const keepAlive = setInterval(() => {}, 1000);
+    try {
+      const history: WireMessage[] = [{ role: 'assistant', content: 'hello' }];
+      const before = structuredClone(history);
+      const reply = await createAiClient({ ...backupOptions, timeoutMs: 5 }).continue(history, 'private message', 'owner');
+      assert.deepEqual(history, before);
+      assert.deepEqual(reply.verdict, { result: 'pass', reason: 'kind' });
+      assert.equal(reply.text, 'welcome.');
+      assert.equal(reply.history.length, 3);
+      const backup = calls.at(-1)!;
+      assert.equal(backup.url, 'https://ai.hackclub.com/proxy/v1/chat/completions');
+      assert.equal(backup.headers.get('authorization'), 'Bearer backup-secret');
+      assert.deepEqual(backup.body, {
+        model: 'anthropic/claude-haiku-5.5', max_tokens: 1024, stream: false,
+        messages: [{ role: 'system', content: officerPrompt() }, ...before, { role: 'user', content: ownerNote('private message') }],
+      });
+      assert.deepEqual(calls[0].body.messages, backup.body.messages.slice(1));
+      assert.equal(calls.filter((call) => call.url.includes('hackclub')).length, 1);
+      assert.match(warnings.join(' '), /command code -> Hack Club AI/);
+      assert.doesNotMatch(warnings.join(' '), /primary-secret|backup-secret|private message/);
+    } finally {
+      clearInterval(keepAlive);
+    }
+  });
+}
+
+test('primary is retried first on every turn after a backup success and model override is honored', async () => {
+  const provider = stubProvider([
+    { status: 400, body: {} },
+    { body: { choices: [{ message: { content: 'hello' } }] } },
+    { body: { content: [{ type: 'text', text: 'no.\nVERDICT: {"result":"fail","reason":"spam"}' }] } },
+  ]);
+  try {
+    const ai = createAiClient({ ...backupOptions, hackclubModel: 'custom/model' });
+    const opening = await ai.start('tester');
+    const closing = await ai.continue(opening.history, 'answer');
+    assert.equal(provider.calls[1].body.model, 'custom/model');
+    assert.match(provider.calls[2].url, /commandcode/);
+    assert.equal(provider.calls.length, 3);
+    assert.deepEqual(closing.verdict, { result: 'fail', reason: 'spam' });
+  } finally { provider.restore(); }
+});
+
+for (const body of [
+  { choices: [{ message: { content: 'no thanks' } }] },
+  { choices: [{ message: { content: null, refusal: 'no thanks' } }] },
+  { choices: [{ message: { content: 'no.\nVERDICT: {"result":"fail","reason":"spam"}' } }] },
+]) {
+  test('usable primary completions, refusals and verdicts never trigger backup', async () => {
+    const provider = stubProvider([{ body }]);
+    try {
+      await createAiClient({ ...backupOptions, model: 'chat-model' }).start('tester');
+      assert.equal(provider.calls.length, 1);
+    } finally { provider.restore(); }
+  });
+}
+
+for (const body of [null, { choices: [{ message: { content: 123 } }] }, { choices: [] }]) {
+  test('both providers failing produces only sanitized errors and preserves input', async () => {
+    const provider = stubProvider([{ status: 400, body: { error: { message: 'primary-secret' } } }, { body }]);
+    const history: WireMessage[] = [{ role: 'assistant', content: 'private message' }];
+    try {
+      await assert.rejects(createAiClient(backupOptions).continue(history, 'answer'), (error: Error) => {
+        assert.match(error.message, /AI providers failed/);
+        assert.doesNotMatch(error.stack!, /primary-secret|backup-secret|private message/);
+        return true;
+      });
+      assert.equal(provider.calls.length, 2);
+      assert.deepEqual(history, [{ role: 'assistant', content: 'private message' }]);
+    } finally { provider.restore(); }
+  });
+}
+
+test('mock mode bypasses both configured providers', async (t) => {
+  const fetch = t.mock.method(globalThis, 'fetch', () => { throw new Error('unexpected HTTP'); });
+  const ai = createAiClient({ ...backupOptions, mock: true });
+  const opening = await ai.start('tester');
+  await ai.continue(opening.history, 'answer');
+  assert.equal(fetch.mock.callCount(), 0);
+});
+
+test('application errors do not trigger backup', async () => {
+  const provider = stubProvider([{ body: {} }]);
+  try {
+    await assert.rejects(createAiClient({ ...backupOptions, timeoutMs: -1 }).start('tester'), RangeError);
+    assert.equal(provider.calls.length, 0);
+  } finally { provider.restore(); }
+});
+
+for (const kind of ['http', 'network', 'timeout'] as const) {
+  test(`backup ${kind} failure is sanitized and never retried`, async (t) => {
+    let calls = 0;
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+      calls += 1;
+      if (!url.includes('hackclub')) return Response.json({}, { status: 400 });
+      if (kind === 'network') throw new Error('backup-secret private message');
+      if (kind === 'timeout') {
+        await new Promise((_, reject) => init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true }));
+      }
+      return Response.json({ error: { message: 'backup-secret private message' } }, { status: 503 });
+    });
+    const keepAlive = setInterval(() => {}, 1000);
+    try {
+      await assert.rejects(createAiClient({ ...backupOptions, timeoutMs: 5 }).start('tester'), (error: Error) => {
+        assert.equal(error.message, `AI providers failed: command code (http); Hack Club AI (${kind})`);
+        return true;
+      });
+      assert.equal(calls, 2);
+    } finally { clearInterval(keepAlive); }
+  });
+}

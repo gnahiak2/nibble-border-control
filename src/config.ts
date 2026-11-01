@@ -13,6 +13,8 @@ export interface Config {
   apiKey: string;
   apiKeySource: string;
   aiMock: boolean;
+  hackclubApiKey?: string;
+  hackclubModel: string;
 }
 
 function required(name: string): string {
@@ -54,4 +56,6 @@ export const config: Config = {
   apiKey: apiKey.key,
   apiKeySource: apiKey.source,
   aiMock: process.env.AI_MOCK?.trim() === '1',
+  hackclubApiKey: process.env.HACKCLUB_AI_API_KEY?.trim() || undefined,
+  hackclubModel: process.env.HACKCLUB_AI_MODEL?.trim() || 'anthropic/claude-haiku-5.5',
 };

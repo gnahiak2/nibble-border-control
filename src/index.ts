@@ -14,7 +14,10 @@ const app = new App({
 });
 
 const store = new InterviewStore(join(process.cwd(), 'data', 'interviews.json'));
-const ai = createAiClient({ apiKey: config.apiKey, model: config.aiModel, mock: config.aiMock });
+const ai = createAiClient({
+  apiKey: config.apiKey, model: config.aiModel, mock: config.aiMock,
+  hackclubApiKey: config.hackclubApiKey, hackclubModel: config.hackclubModel,
+});
 
 let botUserId: string | undefined;
 
@@ -58,7 +61,7 @@ async function finalize(
     await client.chat.postMessage({
       channel: interview.channelId,
       thread_ts: interview.threadTs,
-      text: `entry denied,,, ${verdict.reason}`,
+      text: `Entry denied. ${verdict.reason}`,
       blocks: failBlocks(interview.userId, verdict.reason),
     });
     return;
@@ -80,7 +83,7 @@ async function finalize(
       await client.chat.postMessage({
         channel: interview.channelId,
         thread_ts: interview.threadTs,
-        text: 'your visa is stamped, but the gate did not open. an officer has been notified.',
+        text: 'Your visa is stamped, but the door did not open. An officer has been notified.',
       });
     }
   }
@@ -88,7 +91,7 @@ async function finalize(
   await client.chat.postMessage({
     channel: interview.channelId,
     thread_ts: interview.threadTs,
-    text: `visa granted: ${verdict.reason}`,
+    text: `Visa granted. ${verdict.reason}`,
     blocks: passBlocks(interview.userId, verdict.reason, config.approvedChannelId),
   });
 
@@ -110,7 +113,7 @@ app.event('member_joined_channel', async ({ event, client, logger }) => {
 
     await client.chat.postMessage({
       channel: event.channel,
-      text: `hi hi, <@${event.user}> :3 welcome to nibble border control`,
+      text: `Arrival recorded. <@${event.user}> has reached the desk.`,
       blocks: welcomeBlocks(event.user),
     });
   } catch (err) {
@@ -131,7 +134,7 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     await client.chat.postEphemeral({
       channel: channelId,
       user: clickerId,
-      text: 'nya?,,, that button isn’t yours :< press the one on your own welcome message',
+      text: 'That button is assigned to someone else. Press the one on your own welcome message.',
     });
     return;
   }
@@ -140,7 +143,7 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     await client.chat.postEphemeral({
       channel: channelId,
       user: clickerId,
-      text: 'hmph,,, you already have an interview going,,, finish that one first :<',
+      text: 'You already have an interview in progress. Finish that one first.',
     });
     return;
   }
@@ -149,7 +152,7 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     await client.chat.postEphemeral({
       channel: channelId,
       user: clickerId,
-      text: 'mrrp? there’s already an interview happening in here :3',
+      text: 'There is already an interview in progress in this thread.',
     });
     return;
   }
@@ -186,7 +189,7 @@ app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, act
     await client.chat.postMessage({
       channel: channelId,
       thread_ts: threadTs,
-      text: 'nyah,,, my terminal went dark :< press the button again to reapply?',
+      text: 'The desk terminal is unavailable. Press the button to reapply.',
     });
   }
 });
@@ -239,7 +242,7 @@ app.message(async ({ message, client, logger }) => {
       await client.chat.postMessage({
         channel: current.channelId,
         thread_ts: current.threadTs,
-        text: 'nya?,,, the screen flickered,,, say that again? :<',
+        text: 'Transmission interrupted. Repeat your last message.',
       });
     }
   });
@@ -256,7 +259,8 @@ async function main(): Promise<void> {
   await app.start();
   console.log(
     `nibble border control is on duty — interviewing with ${config.aiModel}` +
-      `${config.aiMock ? ' (mock interviews)' : ` via the command code provider, api key from ${config.apiKeySource}`}`,
+      `${config.aiMock ? ' (mock interviews)' : ` via primary command code provider, api key from ${config.apiKeySource}`}` +
+      `${!config.aiMock && config.hackclubApiKey ? `; optional backup: Hack Club AI (${config.hackclubModel})` : ''}`,
   );
 
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
