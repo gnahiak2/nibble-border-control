@@ -35,3 +35,13 @@ bun run typecheck
 ```
 
 `.claude/` and `.remember/` are gitignored, so nothing personal gets committed.
+
+## docker
+
+```bash
+cp .env.example .env   # fill it in
+docker compose up -d --build
+docker compose logs -f
+```
+
+socket mode means no ports need exposing.
