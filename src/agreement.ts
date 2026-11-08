@@ -3,13 +3,15 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
 /** Bump this whenever the wording below changes, so every record points at the exact text promised. */
-export const PROMISE_VERSION = "2";
+export const PROMISE_VERSION = "3";
 
 export const PROMISE_POINTS = [
-  "*What stays here:* everything in the channel: messages, pictures, files, links, and anything about me or " +
-    "the other people in it.",
-  "*What I promise:* I won't share any of it outside the channel. No screenshots, no forwarding, no telling " +
-    "people what was said, no posting it anywhere, and no pasting it into AI tools.",
+  "*What's private:* anything personal: stuff about the life of whoever runs this channel, stuff about the other people in here, and " +
+    "anything someone says is private.",
+  "*What I promise:* I won't share private stuff outside the channel. No screenshots, no forwarding, no " +
+    "telling people what was said, no posting it anywhere, and no pasting it into AI tools.",
+  "*What's fine to share:* things that are clearly meant to be shared and aren't sensitive (a link, a meme, " +
+    "an event) can be forwarded. Use common sense: if you're not sure, don't, or ask first.",
   "*If I break it:* I'll be removed from the channel and won't be let back in.",
   "*How long:* this promise still counts after I leave the channel.",
 ];
