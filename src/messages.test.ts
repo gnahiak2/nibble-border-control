@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PROMISE_TEXT, buildPromise, savePromise } from "./agreement";
-import { copy, entryForm, readAnswers, reviewMessage, welcomeMessage } from "./messages";
+import { PROMISE_TEXT, agreedOnPost, buildPromise, channelPromiseText, readPromises, savePromise } from "./agreement";
+import { channelPromiseMessage, copy, entryForm, readAnswers, reviewMessage, welcomeMessage } from "./messages";
 
 const origin = { user: "U1", channel: "C1", ts: "1.1" };
 
@@ -49,4 +49,29 @@ test("review message has approve and deny with the origin and the promise", () =
   expect(json).toContain("approve_application");
   expect(json).toContain("deny_application");
   expect(json).toContain("*Promise:* made at");
+});
+
+test("channel promise post has the I agree button and lists who agreed", () => {
+  const empty = JSON.stringify(channelPromiseMessage("UOWNER", []).blocks);
+  expect(empty).toContain("agree_channel_promise");
+  expect(empty).toContain("<@UOWNER>'s life");
+  expect(empty).toContain("Nobody has yet");
+  const some = JSON.stringify(channelPromiseMessage(undefined, ["U1", "U2"]).blocks);
+  expect(some).toContain("Agreed (2): <@U1> <@U2>");
+  expect(some).toContain("whoever runs this channel");
+});
+
+test("agreedOnPost dedupes per post and ignores entry-form promises", async () => {
+  const file = join(await mkdtemp(join(tmpdir(), "bc-")), "promises.jsonl");
+  expect(await readPromises(file)).toEqual([]);
+  const text = channelPromiseText();
+  await savePromise(file, buildPromise({ slackUserId: "U1", source: "channel_post", postTs: "9.9", text }));
+  await savePromise(file, buildPromise({ slackUserId: "U2", source: "channel_post", postTs: "9.9", text }));
+  await savePromise(file, buildPromise({ slackUserId: "U1", source: "channel_post", postTs: "9.9", text }));
+  await savePromise(file, buildPromise({ slackUserId: "U3", source: "channel_post", postTs: "8.8", text }));
+  await savePromise(file, buildPromise({ slackUserId: "U4", name: "x" }));
+  const records = await readPromises(file);
+  expect(agreedOnPost(records, "9.9")).toEqual(["U1", "U2"]);
+  expect(records[0].promiseText).toBe(text);
+  expect(records[4].source).toBe("entry_form");
 });

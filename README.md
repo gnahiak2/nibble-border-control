@@ -22,8 +22,12 @@ sharing and not sensitive can be forwarded, with common sense: not sure = don't,
 removed for good, and it still counts after you leave.
 wording lives in `PROMISE_POINTS` in `src/agreement.ts`; bump `PROMISE_VERSION` when you change it.
 
+**people already in the channel:** with the bot running, `bun run announce` (docker:
+`docker compose exec bot bun src/announce.ts`) posts a short version of the promise into the approved
+channel with an **I agree** button. each press is logged, and the post keeps a list of who has agreed.
+
 each promise is one JSON line in `PROMISES_FILE` (default `data/promises.jsonl`): slack user and team id,
-the name they gave, when, and the exact text they promised. if it can't be saved they aren't let in.
+the name they gave, when, the exact text they promised, and `source` (`entry_form` or `channel_post`). if it can't be saved they aren't let in.
 
 ## setup
 
