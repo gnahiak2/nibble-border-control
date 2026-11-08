@@ -1,5 +1,5 @@
 import type { KnownBlock, View } from "@slack/types";
-import { AGREEMENT_VERSION, agreementClauses, type AgreementTerms, type SignatureRecord } from "./agreement";
+import { PROMISE_POINTS, type PromiseRecord } from "./agreement";
 
 export const ACTIONS = {
   start: "start_application",
@@ -20,10 +20,7 @@ export interface Answers {
   name: string;
   found: string;
   why: string;
-  /** Typed full legal name: the electronic signature. */
-  legalName: string;
-  agreed: boolean;
-  adult: boolean;
+  promised: boolean;
 }
 
 export function welcomeMessage(user: string): { text: string; blocks: KnownBlock[] } {
@@ -54,13 +51,13 @@ export function welcomeMessage(user: string): { text: string; blocks: KnownBlock
   };
 }
 
-export function entryForm(origin: Origin, terms: AgreementTerms): View {
+export function entryForm(origin: Origin): View {
   return {
     type: "modal",
     callback_id: MODAL_CALLBACK,
     private_metadata: JSON.stringify(origin),
     title: { type: "plain_text", text: "Entry form" },
-    submit: { type: "plain_text", text: "Sign & submit" },
+    submit: { type: "plain_text", text: "Submit" },
     close: { type: "plain_text", text: "Cancel" },
     blocks: [
       {
@@ -82,43 +79,26 @@ export function entryForm(origin: Origin, terms: AgreementTerms): View {
         element: { type: "plain_text_input", action_id: "value", multiline: true, max_length: 1000 },
       },
       { type: "divider" },
-      { type: "header", text: { type: "plain_text", text: "Confidentiality undertaking" } },
+      { type: "header", text: { type: "plain_text", text: "The promise" } },
       {
         type: "context",
         elements: [
           {
             type: "mrkdwn",
-            text:
-              "The channel you're applying to is extremely personal. Entry requires a binding promise to keep it " +
-              "private. Read it properly: it has consequences.",
+            text: "The channel you're applying to is really personal. To get in, you have to promise to keep it private.",
           },
         ],
       },
-      ...agreementClauses(terms).map(
-        (text): KnownBlock => ({ type: "section", text: { type: "mrkdwn", text } }),
-      ),
+      ...PROMISE_POINTS.map((text): KnownBlock => ({ type: "section", text: { type: "mrkdwn", text } })),
       {
         type: "input",
-        block_id: "agree",
-        label: { type: "plain_text", text: "Agreement" },
+        block_id: "promise",
+        label: { type: "plain_text", text: "Your promise" },
         element: {
           type: "checkboxes",
           action_id: "value",
-          options: [
-            {
-              text: { type: "plain_text", text: "I have read this undertaking and agree to be legally bound by it" },
-              value: "agree",
-            },
-            { text: { type: "plain_text", text: "I am 18 or older" }, value: "adult" },
-          ],
+          options: [{ text: { type: "plain_text", text: "I promise to keep everything in the channel private" }, value: "promise" }],
         },
-      },
-      {
-        type: "input",
-        block_id: "signature",
-        label: { type: "plain_text", text: "Signature: type your full legal name" },
-        hint: { type: "plain_text", text: "Your real first and last name, not a nickname or username." },
-        element: { type: "plain_text_input", action_id: "value", max_length: 120 },
       },
     ],
   };
@@ -130,23 +110,13 @@ type ViewValues = Record<
 >;
 
 export function readAnswers(values: ViewValues): Answers {
-  const checked = new Set((values.agree?.value?.selected_options ?? []).map((o) => o.value));
+  const checked = (values.promise?.value?.selected_options ?? []).some((o) => o.value === "promise");
   return {
     name: values.name?.value?.value?.trim() ?? "",
     found: values.found?.value?.value?.trim() ?? "",
     why: values.why?.value?.value?.trim() ?? "",
-    legalName: (values.signature?.value?.value ?? "").trim().replace(/\s+/g, " "),
-    agreed: checked.has("agree"),
-    adult: checked.has("adult"),
+    promised: checked,
   };
-}
-
-/** Field errors keyed by block_id, for `ack({ response_action: "errors" })`. Empty = good to go. */
-export function validateAnswers(a: Answers): Record<string, string> {
-  const errors: Record<string, string> = {};
-  if (!a.agreed || !a.adult) errors.agree = "Both boxes are required to enter. Press Cancel if you don't agree.";
-  if (a.legalName.split(" ").length < 2) errors.signature = "Type your full legal name (first and last).";
-  return errors;
 }
 
 const quote = (s: string) => s.split("\n").map((line) => `> ${line}`).join("\n");
@@ -154,7 +124,7 @@ const quote = (s: string) => s.split("\n").map((line) => `> ${line}`).join("\n")
 export function reviewMessage(
   origin: Origin,
   a: Answers,
-  sig: SignatureRecord,
+  record: PromiseRecord,
 ): { text: string; blocks: KnownBlock[] } {
   const text = `New entry application from <@${origin.user}>`;
   return {
@@ -167,8 +137,7 @@ export function reviewMessage(
           type: "mrkdwn",
           text:
             `*Name:*\n${quote(a.name)}\n*Found us via:*\n${quote(a.found)}\n*Why:*\n${quote(a.why)}\n` +
-            `*Confidentiality undertaking:* signed as *${sig.legalName}* at ${sig.signedAt} ` +
-            `(v${sig.agreementVersion}, sha256 \`${sig.agreementSha256.slice(0, 12)}\`)`,
+            `*Promise:* made at ${record.promisedAt} (v${record.promiseVersion})`,
         },
       },
       {
@@ -196,12 +165,12 @@ export function reviewMessage(
 
 export const copy = {
   notYours: "This form isn't yours. Wait for your own welcome message.",
-  signedCopy: (sig: SignatureRecord) =>
-    `:page_facing_up: Here is your copy of the confidentiality undertaking you signed as *${sig.legalName}* ` +
-    `on ${sig.signedAt} (v${AGREEMENT_VERSION}, sha256 \`${sig.agreementSha256}\`). Keep it.\n\n` +
-    "```\n" + sig.agreementText.replace(/\*/g, "") + "\n```",
+  promiseRequired: "You have to promise to get in. Press Cancel if you don't want to.",
+  promiseCopy: (r: PromiseRecord) =>
+    `:handshake: Thanks for promising. Here's what you promised on ${r.promisedAt}, so you remember:\n\n` +
+    PROMISE_POINTS.map((p) => `> ${p}`).join("\n>\n"),
   saveFailed: (user: string) =>
-    `<@${user}>, something went wrong recording your signature. Nothing was saved, so please press the button and try again.`,
+    `<@${user}>, something went wrong saving your promise. Please press the button and try again.`,
   pending: (user: string) => `<@${user}>, your form has been received and is awaiting review.`,
   approved: (user: string, channel: string) => `:white_check_mark: <@${user}>, entry approved. Head over to <#${channel}>.`,
   denied: (user: string) => `<@${user}>, entry denied.`,

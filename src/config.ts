@@ -12,10 +12,5 @@ export const config = {
   welcomeChannelId: required("WELCOME_CHANNEL_ID"),
   approvedChannelId: required("APPROVED_CHANNEL_ID"),
   ownerId: optional("OWNER_SLACK_ID"),
-  agreementsFile: optional("AGREEMENTS_FILE") ?? "data/agreements.jsonl",
-  terms: {
-    ownerName: optional("OWNER_LEGAL_NAME") ?? "the owner of this channel",
-    fine: optional("BREACH_FINE"),
-    governingLaw: optional("GOVERNING_LAW"),
-  },
+  promisesFile: optional("PROMISES_FILE") ?? "data/promises.jsonl",
 };
