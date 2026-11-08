@@ -4,3 +4,8 @@ services:
     image: nibble-border-control
     env_file: .env
     restart: unless-stopped
+    volumes:
+      - agreements:/app/data
+
+volumes:
+  agreements:

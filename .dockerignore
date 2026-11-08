@@ -6,3 +6,4 @@ node_modules
 .remember
 *.md
 src/**/*.test.ts
+data
