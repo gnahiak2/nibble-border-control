@@ -1,0 +1,6 @@
+services:
+  bot:
+    build: .
+    image: nibble-border-control
+    env_file: .env
+    restart: unless-stopped
