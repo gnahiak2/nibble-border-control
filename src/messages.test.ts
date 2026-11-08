@@ -40,6 +40,7 @@ test("promise record pins the exact text and is appended to the log", async () =
   const lines = (await readFile(file, "utf8")).trim().split("\n").map((l) => JSON.parse(l));
   expect(lines.map((l) => l.slackUserId)).toEqual(["U1", "U2"]);
   expect(copy.promiseCopy(r)).toContain("No screenshots");
+  expect(copy.promiseCopy(r)).toContain("common sense");
 });
 
 test("review message has approve and deny with the origin and the promise", () => {

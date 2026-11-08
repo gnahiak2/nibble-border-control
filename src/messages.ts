@@ -85,7 +85,7 @@ export function entryForm(origin: Origin): View {
         elements: [
           {
             type: "mrkdwn",
-            text: "The channel you're applying to is really personal. To get in, you have to promise to keep it private.",
+            text: "The channel you're applying to is really personal. To get in, you have to promise to keep the private stuff private.",
           },
         ],
       },
@@ -97,7 +97,7 @@ export function entryForm(origin: Origin): View {
         element: {
           type: "checkboxes",
           action_id: "value",
-          options: [{ text: { type: "plain_text", text: "I promise to keep everything in the channel private" }, value: "promise" }],
+          options: [{ text: { type: "plain_text", text: "I promise to keep private stuff private and use common sense with the rest" }, value: "promise" }],
         },
       },
     ],

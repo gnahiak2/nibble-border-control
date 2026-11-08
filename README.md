@@ -6,7 +6,7 @@ a slack bot that guards a channel.
 someone joins the welcome channel
   └─▶ bot posts a welcome message + [ Fill in entry form ] button
         └─▶ applicant opens the form: name, how they found you, why they want in,
-            then the promise: tick "I promise to keep everything in the channel private"
+            then the promise: tick "I promise to keep private stuff private and use common sense with the rest"
               ├─ not ticked ─▶ form won't submit (they can just cancel)
               └─ ticked     ─▶ promise logged to PROMISES_FILE + a copy DMed to them
                                  OWNER_SLACK_ID set?  ─▶ DMed to you with Approve / Deny
@@ -16,8 +16,10 @@ someone joins the welcome channel
 
 ## the promise
 
-a plain promise, not a contract: what stays in the channel, no sharing it anywhere (screenshots, forwarding,
-retelling, AI tools), that breaking it gets you removed for good, and that it still counts after you leave.
+a plain promise, not a contract: personal stuff (about the owner, other members, or anything someone says is
+private) never leaves the channel (no screenshots, forwarding, retelling, AI tools). things clearly meant for
+sharing and not sensitive can be forwarded, with common sense: not sure = don't, or ask. breaking it gets you
+removed for good, and it still counts after you leave.
 wording lives in `PROMISE_POINTS` in `src/agreement.ts`; bump `PROMISE_VERSION` when you change it.
 
 each promise is one JSON line in `PROMISES_FILE` (default `data/promises.jsonl`): slack user and team id,
