@@ -1,277 +1,102 @@
-import { join } from 'node:path';
-import { App, type BlockAction, type ButtonAction } from '@slack/bolt';
-import type { WebClient } from '@slack/web-api';
-import { createAiClient, type Verdict } from './ai.js';
-import { config } from './config.js';
-import { interviewKey, newInterview, type Interview } from './interview.js';
-import { approvedChannelNote, failBlocks, passBlocks, welcomeBlocks } from './slack/messages.js';
-import { InterviewStore } from './store.js';
+import { App, type BlockAction, type ButtonAction } from "@slack/bolt";
+import type { WebClient } from "@slack/web-api";
+import { config } from "./config";
+import {
+  ACTIONS,
+  MODAL_CALLBACK,
+  copy,
+  entryForm,
+  readAnswers,
+  reviewMessage,
+  welcomeMessage,
+  type Origin,
+} from "./messages";
 
 const app = new App({
-  token: config.slackBotToken,
-  appToken: config.slackAppToken,
+  token: config.botToken,
+  appToken: config.appToken,
   socketMode: true,
 });
 
-const store = new InterviewStore(join(process.cwd(), 'data', 'interviews.json'));
-const ai = createAiClient({
-  apiKey: config.apiKey, model: config.aiModel, mock: config.aiMock,
-  hackclubApiKey: config.hackclubApiKey, hackclubModel: config.hackclubModel,
-});
+const reply = (client: WebClient, origin: Origin, text: string) =>
+  client.chat.postMessage({ channel: origin.channel, thread_ts: origin.ts, text });
 
-let botUserId: string | undefined;
-
-const queues = new Map<string, Promise<void>>();
-
-function enqueue(key: string, task: () => Promise<void>): void {
-  const previous = queues.get(key) ?? Promise.resolve();
-  const next = previous.then(task).catch((err) => {
-    console.error(`interview ${key} blew up:`, err);
-  });
-
-  void next.then(() => {
-    if (queues.get(key) === next && store.get(key)?.status !== 'active') {
-      queues.delete(key);
-    }
-  });
-
-  queues.set(key, next);
-}
-
-async function finalize(
-  client: WebClient,
-  interview: Interview,
-  verdict: Verdict,
-  closingText: string,
-): Promise<void> {
-  interview.status = verdict.result === 'pass' ? 'approved' : 'rejected';
-  interview.finishedAt = Date.now();
-  interview.verdictReason = verdict.reason;
-  store.set(interview);
-
-  if (closingText) {
-    await client.chat.postMessage({
-      channel: interview.channelId,
-      thread_ts: interview.threadTs,
-      text: closingText,
-    });
-  }
-
-  if (verdict.result === 'fail') {
-    await client.chat.postMessage({
-      channel: interview.channelId,
-      thread_ts: interview.threadTs,
-      text: `Entry denied. ${verdict.reason}`,
-      blocks: failBlocks(interview.userId, verdict.reason),
-    });
-    return;
-  }
-
-  let admitted = false;
+async function admit(client: WebClient, origin: Origin) {
   try {
-    await client.conversations.invite({
-      channel: config.approvedChannelId,
-      users: interview.userId,
-    });
-    admitted = true;
-  } catch (err) {
-    const slackError = (err as { data?: { error?: string } }).data?.error;
-    if (slackError === 'already_in_channel') {
-      console.log(`${interview.userName} was already admitted`);
-    } else {
-      console.error(`could not admit ${interview.userName}:`, err);
-      await client.chat.postMessage({
-        channel: interview.channelId,
-        thread_ts: interview.threadTs,
-        text: 'Your visa is stamped, but the door did not open. An officer has been notified.',
-      });
-    }
+    await client.conversations.invite({ channel: config.approvedChannelId, users: origin.user });
+  } catch (err: any) {
+    if (err?.data?.error !== "already_in_channel") throw err;
   }
-
-  await client.chat.postMessage({
-    channel: interview.channelId,
-    thread_ts: interview.threadTs,
-    text: `Visa granted. ${verdict.reason}`,
-    blocks: passBlocks(interview.userId, verdict.reason, config.approvedChannelId),
-  });
-
-  if (admitted) {
-    await client.chat.postMessage({
-      channel: config.approvedChannelId,
-      text: approvedChannelNote(interview.userId),
-    });
-  }
+  await reply(client, origin, copy.approved(origin.user, config.approvedChannelId));
+  await client.chat.postMessage({ channel: config.approvedChannelId, text: copy.arrival(origin.user) });
 }
 
-app.event('member_joined_channel', async ({ event, client, logger }) => {
+// 1. someone joins the welcome channel -> greet them with the form button
+app.event("member_joined_channel", async ({ event, client, context }) => {
   if (event.channel !== config.welcomeChannelId) return;
-  if (!event.user || event.user === botUserId) return;
-
-  try {
-    const info = await client.users.info({ user: event.user });
-    if (info.user?.is_bot || info.user?.deleted) return;
-
-    await client.chat.postMessage({
-      channel: event.channel,
-      text: `Arrival recorded. <@${event.user}> has reached the desk.`,
-      blocks: welcomeBlocks(event.user),
-    });
-  } catch (err) {
-    logger.error(err);
-  }
+  if (event.user === context.botUserId) return;
+  await client.chat.postMessage({ channel: event.channel, ...welcomeMessage(event.user) });
 });
 
-app.action<BlockAction<ButtonAction>>('start_interview', async ({ ack, body, action, client, logger }) => {
+// 2. button -> open the entry form (only for the person it was posted for)
+app.action<BlockAction<ButtonAction>>(ACTIONS.start, async ({ ack, body, action, client }) => {
   await ack();
-
-  const channelId = body.channel?.id;
-  const threadTs = body.message?.ts;
-  const clickerId = body.user.id;
-
-  if (!channelId || !threadTs) return;
-
-  if (action.value && action.value !== clickerId) {
-    await client.chat.postEphemeral({
-      channel: channelId,
-      user: clickerId,
-      text: 'That button is assigned to someone else. Press the one on your own welcome message.',
-    });
+  const applicant = action.value!;
+  if (body.user.id !== applicant) {
+    await client.chat.postEphemeral({ channel: body.channel!.id, user: body.user.id, text: copy.notYours });
     return;
   }
-
-  if (store.findActiveByUser(clickerId)) {
-    await client.chat.postEphemeral({
-      channel: channelId,
-      user: clickerId,
-      text: 'You already have an interview in progress. Finish that one first.',
-    });
-    return;
-  }
-
-  if (store.get(interviewKey(channelId, threadTs))?.status === 'active') {
-    await client.chat.postEphemeral({
-      channel: channelId,
-      user: clickerId,
-      text: 'There is already an interview in progress in this thread.',
-    });
-    return;
-  }
-
-  let userName = clickerId;
-  try {
-    const info = await client.users.info({ user: clickerId });
-    userName = info.user?.profile?.display_name || info.user?.real_name || clickerId;
-  } catch {
-    // fall back to the user id
-  }
-
-  const interview = newInterview({ channelId, threadTs, userId: clickerId, userName });
-  store.set(interview);
-
-  try {
-    const opening = await ai.start(userName);
-    interview.history = opening.history;
-    interview.turns = 1;
-    store.set(interview);
-
-    await client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text: opening.text,
-    });
-  } catch (err) {
-    logger.error(err);
-    interview.status = 'rejected';
-    interview.finishedAt = Date.now();
-    interview.verdictReason = 'my terminal went dark';
-    store.set(interview);
-
-    await client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text: 'The desk terminal is unavailable. Press the button to reapply.',
-    });
-  }
+  const origin: Origin = { user: applicant, channel: body.channel!.id, ts: body.message!.ts };
+  await client.views.open({ trigger_id: body.trigger_id, view: entryForm(origin) });
 });
 
-app.message(async ({ message, client, logger }) => {
-  const msg = message as {
-    subtype?: string;
-    bot_id?: string;
-    user?: string;
-    channel?: string;
-    text?: string;
-    thread_ts?: string;
-  };
+// 3. form submitted -> refuse on "no", otherwise review (or auto-approve with no owner)
+app.view(MODAL_CALLBACK, async ({ ack, view, body, client }) => {
+  await ack();
+  const origin: Origin = JSON.parse(view.private_metadata);
+  if (body.user.id !== origin.user) return;
+  const answers = readAnswers(view.state.values as any);
 
-  if (msg.bot_id || !msg.user || !msg.channel || !msg.text) return;
-  if (msg.subtype && msg.subtype !== 'thread_broadcast') return;
-  if (!msg.thread_ts) return;
+  if (!answers.agreed) {
+    await reply(client, origin, copy.declinedClause(origin.user));
+    return;
+  }
+  if (!config.ownerId) {
+    await admit(client, origin);
+    return;
+  }
+  await client.chat.postMessage({ channel: config.ownerId, ...reviewMessage(origin, answers) });
+  await reply(client, origin, copy.pending(origin.user));
+});
 
-  const key = interviewKey(msg.channel, msg.thread_ts);
-  const interview = store.get(key);
-  if (!interview || interview.status !== 'active') return;
+// 4. owner approves / denies from their DM
+for (const [actionId, verdict] of [
+  [ACTIONS.approve, "approved"],
+  [ACTIONS.deny, "denied"],
+] as const) {
+  app.action<BlockAction<ButtonAction>>(actionId, async ({ ack, body, action, client }) => {
+    await ack();
+    if (body.user.id !== config.ownerId) return;
+    const origin: Origin = JSON.parse(action.value!);
 
-  const speaker =
-    msg.user === interview.userId ? 'applicant' : msg.user === config.ownerSlackId ? 'owner' : undefined;
-  if (!speaker) return;
+    if (verdict === "approved") await admit(client, origin);
+    else await reply(client, origin, copy.denied(origin.user));
 
-  const replyText = msg.text;
-
-  enqueue(key, async () => {
-    const current = store.get(key);
-    if (!current || current.status !== 'active') return;
-
-    try {
-      const reply = await ai.continue(current.history, replyText, speaker);
-      current.history = reply.history;
-      current.turns += 1;
-      store.set(current);
-
-      if (reply.verdict) {
-        await finalize(client, current, reply.verdict, reply.text);
-      } else {
-        await client.chat.postMessage({
-          channel: current.channelId,
-          thread_ts: current.threadTs,
-          text: reply.text,
-        });
-      }
-    } catch (err) {
-      logger.error(err);
-      await client.chat.postMessage({
-        channel: current.channelId,
-        thread_ts: current.threadTs,
-        text: 'Transmission interrupted. Repeat your last message.',
-      });
-    }
+    // swap the buttons for the verdict so it can't be clicked twice
+    const decided = copy.decided(verdict, origin.user, body.user.id);
+    const blocks = (body.message?.blocks ?? []).filter((b: any) => b.type !== "actions");
+    await client.chat.update({
+      channel: body.channel!.id,
+      ts: body.message!.ts,
+      text: decided,
+      blocks: [...blocks, { type: "context", elements: [{ type: "mrkdwn", text: decided }] }],
+    });
   });
-});
-
-app.error(async (error) => {
-  console.error('border control error:', error);
-});
-
-async function main(): Promise<void> {
-  const auth = await app.client.auth.test();
-  botUserId = auth.user_id;
-
-  await app.start();
-  console.log(
-    `nibble border control is on duty — interviewing with ${config.aiModel}` +
-      `${config.aiMock ? ' (mock interviews)' : ` via primary command code provider, api key from ${config.apiKeySource}`}` +
-      `${!config.aiMock && config.hackclubApiKey ? `; optional backup: Hack Club AI (${config.hackclubModel})` : ''}`,
-  );
-
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    process.on(signal, () => {
-      console.log(`${signal} received — closing the border`);
-      void app.stop().then(() => process.exit(0));
-    });
-  }
 }
 
-main().catch((err) => {
-  console.error('failed to open the border:', err);
-  process.exit(1);
+app.error(async (err) => {
+  console.error("[border-control]", err);
 });
+
+await app.start();
+console.log("border control is open");

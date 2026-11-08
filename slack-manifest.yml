@@ -1,7 +1,6 @@
 display_information:
-  name: Nibble Border Control
-  description: interviews new arrivals and stamps visas into the approved channel (one desk, one stamp)
-  background_color: "#1a1a2e"
+  name: border control
+  description: greets new arrivals and makes them fill in an entry form
 features:
   bot_user:
     display_name: border control
@@ -11,18 +10,15 @@ oauth_config:
     bot:
       - chat:write
       - channels:read
-      - channels:history
       - channels:manage
       - groups:write
-      - groups:history
-      - users:read
+      - im:write
 settings:
   event_subscriptions:
     bot_events:
       - member_joined_channel
-      - message.channels
   interactivity:
     is_enabled: true
-  org_deploy_enabled: false
   socket_mode_enabled: true
+  org_deploy_enabled: false
   token_rotation_enabled: false
