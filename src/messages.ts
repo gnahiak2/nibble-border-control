@@ -1,4 +1,5 @@
 import type { KnownBlock, View } from "@slack/types";
+import { AGREEMENT_VERSION, agreementClauses, type AgreementTerms, type SignatureRecord } from "./agreement";
 
 export const ACTIONS = {
   start: "start_application",
@@ -7,10 +8,6 @@ export const ACTIONS = {
 } as const;
 
 export const MODAL_CALLBACK = "entry_form";
-
-export const CLAUSE_TEXT =
-  "The channel you're applying to is extremely personal and can include details of my life. " +
-  "Do you agree to keep everything you see in it private: no screenshots, no sharing, no repeating it outside?";
 
 /** Where the applicant's welcome message lives, so replies land in its thread. */
 export interface Origin {
@@ -23,7 +20,10 @@ export interface Answers {
   name: string;
   found: string;
   why: string;
+  /** Typed full legal name: the electronic signature. */
+  legalName: string;
   agreed: boolean;
+  adult: boolean;
 }
 
 export function welcomeMessage(user: string): { text: string; blocks: KnownBlock[] } {
@@ -54,13 +54,13 @@ export function welcomeMessage(user: string): { text: string; blocks: KnownBlock
   };
 }
 
-export function entryForm(origin: Origin): View {
+export function entryForm(origin: Origin, terms: AgreementTerms): View {
   return {
     type: "modal",
     callback_id: MODAL_CALLBACK,
     private_metadata: JSON.stringify(origin),
     title: { type: "plain_text", text: "Entry form" },
-    submit: { type: "plain_text", text: "Submit" },
+    submit: { type: "plain_text", text: "Sign & submit" },
     close: { type: "plain_text", text: "Cancel" },
     blocks: [
       {
@@ -82,39 +82,80 @@ export function entryForm(origin: Origin): View {
         element: { type: "plain_text_input", action_id: "value", multiline: true, max_length: 1000 },
       },
       { type: "divider" },
+      { type: "header", text: { type: "plain_text", text: "Confidentiality undertaking" } },
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text:
+              "The channel you're applying to is extremely personal. Entry requires a binding promise to keep it " +
+              "private. Read it properly: it has consequences.",
+          },
+        ],
+      },
+      ...agreementClauses(terms).map(
+        (text): KnownBlock => ({ type: "section", text: { type: "mrkdwn", text } }),
+      ),
       {
         type: "input",
-        block_id: "clause",
-        label: { type: "plain_text", text: "Privacy clause" },
-        hint: { type: "plain_text", text: "Answering no ends the application." },
+        block_id: "agree",
+        label: { type: "plain_text", text: "Agreement" },
         element: {
-          type: "radio_buttons",
+          type: "checkboxes",
           action_id: "value",
           options: [
-            { text: { type: "plain_text", text: "Yes, I agree" }, value: "yes" },
-            { text: { type: "plain_text", text: "No" }, value: "no" },
+            {
+              text: { type: "plain_text", text: "I have read this undertaking and agree to be legally bound by it" },
+              value: "agree",
+            },
+            { text: { type: "plain_text", text: "I am 18 or older" }, value: "adult" },
           ],
         },
       },
-      { type: "context", elements: [{ type: "mrkdwn", text: CLAUSE_TEXT }] },
+      {
+        type: "input",
+        block_id: "signature",
+        label: { type: "plain_text", text: "Signature: type your full legal name" },
+        hint: { type: "plain_text", text: "Your real first and last name, not a nickname or username." },
+        element: { type: "plain_text_input", action_id: "value", max_length: 120 },
+      },
     ],
   };
 }
 
-type ViewValues = Record<string, Record<string, { value?: string | null; selected_option?: { value: string } | null }>>;
+type ViewValues = Record<
+  string,
+  Record<string, { value?: string | null; selected_options?: { value: string }[] | null }>
+>;
 
 export function readAnswers(values: ViewValues): Answers {
+  const checked = new Set((values.agree?.value?.selected_options ?? []).map((o) => o.value));
   return {
     name: values.name?.value?.value?.trim() ?? "",
     found: values.found?.value?.value?.trim() ?? "",
     why: values.why?.value?.value?.trim() ?? "",
-    agreed: values.clause?.value?.selected_option?.value === "yes",
+    legalName: (values.signature?.value?.value ?? "").trim().replace(/\s+/g, " "),
+    agreed: checked.has("agree"),
+    adult: checked.has("adult"),
   };
+}
+
+/** Field errors keyed by block_id, for `ack({ response_action: "errors" })`. Empty = good to go. */
+export function validateAnswers(a: Answers): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!a.agreed || !a.adult) errors.agree = "Both boxes are required to enter. Press Cancel if you don't agree.";
+  if (a.legalName.split(" ").length < 2) errors.signature = "Type your full legal name (first and last).";
+  return errors;
 }
 
 const quote = (s: string) => s.split("\n").map((line) => `> ${line}`).join("\n");
 
-export function reviewMessage(origin: Origin, a: Answers): { text: string; blocks: KnownBlock[] } {
+export function reviewMessage(
+  origin: Origin,
+  a: Answers,
+  sig: SignatureRecord,
+): { text: string; blocks: KnownBlock[] } {
   const text = `New entry application from <@${origin.user}>`;
   return {
     text,
@@ -126,7 +167,8 @@ export function reviewMessage(origin: Origin, a: Answers): { text: string; block
           type: "mrkdwn",
           text:
             `*Name:*\n${quote(a.name)}\n*Found us via:*\n${quote(a.found)}\n*Why:*\n${quote(a.why)}\n` +
-            `*Privacy clause:* agreed`,
+            `*Confidentiality undertaking:* signed as *${sig.legalName}* at ${sig.signedAt} ` +
+            `(v${sig.agreementVersion}, sha256 \`${sig.agreementSha256.slice(0, 12)}\`)`,
         },
       },
       {
@@ -154,8 +196,12 @@ export function reviewMessage(origin: Origin, a: Answers): { text: string; block
 
 export const copy = {
   notYours: "This form isn't yours. Wait for your own welcome message.",
-  declinedClause: (user: string) =>
-    `<@${user}>, entry refused: the privacy clause is required. Press the button again if you change your mind.`,
+  signedCopy: (sig: SignatureRecord) =>
+    `:page_facing_up: Here is your copy of the confidentiality undertaking you signed as *${sig.legalName}* ` +
+    `on ${sig.signedAt} (v${AGREEMENT_VERSION}, sha256 \`${sig.agreementSha256}\`). Keep it.\n\n` +
+    "```\n" + sig.agreementText.replace(/\*/g, "") + "\n```",
+  saveFailed: (user: string) =>
+    `<@${user}>, something went wrong recording your signature. Nothing was saved, so please press the button and try again.`,
   pending: (user: string) => `<@${user}>, your form has been received and is awaiting review.`,
   approved: (user: string, channel: string) => `:white_check_mark: <@${user}>, entry approved. Head over to <#${channel}>.`,
   denied: (user: string) => `<@${user}>, entry denied.`,

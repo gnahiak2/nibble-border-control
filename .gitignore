@@ -7,3 +7,6 @@ node_modules/
 .claude/
 .remember/
 CLAUDE.local.md
+
+# signed agreements (personal data)
+data/

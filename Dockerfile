@@ -8,6 +8,7 @@ RUN bun install --frozen-lockfile --production
 
 COPY tsconfig.json ./
 COPY src ./src
+RUN mkdir -p /app/data && chown bun:bun /app/data
 
 USER bun
 CMD ["bun", "src/index.ts"]

@@ -4,10 +4,18 @@ function required(name: string): string {
   return value;
 }
 
+const optional = (name: string) => process.env[name]?.trim() || undefined;
+
 export const config = {
   botToken: required("SLACK_BOT_TOKEN"),
   appToken: required("SLACK_APP_TOKEN"),
   welcomeChannelId: required("WELCOME_CHANNEL_ID"),
   approvedChannelId: required("APPROVED_CHANNEL_ID"),
-  ownerId: process.env.OWNER_SLACK_ID?.trim() || undefined,
+  ownerId: optional("OWNER_SLACK_ID"),
+  agreementsFile: optional("AGREEMENTS_FILE") ?? "data/agreements.jsonl",
+  terms: {
+    ownerName: optional("OWNER_LEGAL_NAME") ?? "the owner of this channel",
+    fine: optional("BREACH_FINE"),
+    governingLaw: optional("GOVERNING_LAW"),
+  },
 };

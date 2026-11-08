@@ -1,5 +1,6 @@
 import { App, type BlockAction, type ButtonAction } from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
+import { buildSignature, saveSignature } from "./agreement";
 import { config } from "./config";
 import {
   ACTIONS,
@@ -8,6 +9,7 @@ import {
   entryForm,
   readAnswers,
   reviewMessage,
+  validateAnswers,
   welcomeMessage,
   type Origin,
 } from "./messages";
@@ -47,25 +49,41 @@ app.action<BlockAction<ButtonAction>>(ACTIONS.start, async ({ ack, body, action,
     return;
   }
   const origin: Origin = { user: applicant, channel: body.channel!.id, ts: body.message!.ts };
-  await client.views.open({ trigger_id: body.trigger_id, view: entryForm(origin) });
+  await client.views.open({ trigger_id: body.trigger_id, view: entryForm(origin, config.terms) });
 });
 
-// 3. form submitted -> refuse on "no", otherwise review (or auto-approve with no owner)
+// 3. form submitted -> reject unless the undertaking is signed, record the signature, then review
+//    (or auto-approve with no owner)
 app.view(MODAL_CALLBACK, async ({ ack, view, body, client }) => {
-  await ack();
   const origin: Origin = JSON.parse(view.private_metadata);
-  if (body.user.id !== origin.user) return;
+  if (body.user.id !== origin.user) return ack();
   const answers = readAnswers(view.state.values as any);
+  const errors = validateAnswers(answers);
+  if (Object.keys(errors).length) return ack({ response_action: "errors", errors });
+  await ack();
 
-  if (!answers.agreed) {
-    await reply(client, origin, copy.declinedClause(origin.user));
+  const sig = buildSignature({
+    terms: config.terms,
+    slackUserId: body.user.id,
+    slackTeamId: body.team?.id,
+    legalName: answers.legalName,
+    confirmedAdult: answers.adult,
+  });
+  // the record is the whole point: if it can't be saved, don't let them in
+  try {
+    await saveSignature(config.agreementsFile, sig);
+  } catch (err) {
+    console.error("[border-control] could not save signature", err);
+    await reply(client, origin, copy.saveFailed(origin.user));
     return;
   }
+  await client.chat.postMessage({ channel: origin.user, text: copy.signedCopy(sig) });
+
   if (!config.ownerId) {
     await admit(client, origin);
     return;
   }
-  await client.chat.postMessage({ channel: config.ownerId, ...reviewMessage(origin, answers) });
+  await client.chat.postMessage({ channel: config.ownerId, ...reviewMessage(origin, answers, sig) });
   await reply(client, origin, copy.pending(origin.user));
 });
 
