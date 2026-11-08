@@ -1,11 +1,10 @@
 import type { KnownBlock, View } from "@slack/types";
-import { PROMISE_POINTS, channelPromiseLines, type PromiseRecord } from "./agreement";
+import { PROMISE_POINTS, type PromiseRecord } from "./agreement";
 
 export const ACTIONS = {
   start: "start_application",
   approve: "approve_application",
   deny: "deny_application",
-  agreePost: "agree_channel_promise",
 } as const;
 
 export const MODAL_CALLBACK = "entry_form";
@@ -164,43 +163,7 @@ export function reviewMessage(
   };
 }
 
-/** The TL;DR posted in the approved channel with an I agree button and a running list of who agreed. */
-export function channelPromiseMessage(owner: string | undefined, agreed: string[]): { text: string; blocks: KnownBlock[] } {
-  const lines = channelPromiseLines(owner);
-  return {
-    text: "The promise: everyone in here needs to agree. " + lines.join(" "),
-    blocks: [
-      { type: "section", text: { type: "mrkdwn", text: "*The promise* :handshake:\n" + lines.join("\n") } },
-      {
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            style: "primary",
-            text: { type: "plain_text", text: "I agree" },
-            action_id: ACTIONS.agreePost,
-            value: "agree",
-          },
-        ],
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: agreed.length
-              ? `Agreed (${agreed.length}): ${agreed.map((u) => `<@${u}>`).join(" ")}`
-              : "Everyone in here needs to press *I agree*. Nobody has yet.",
-          },
-        ],
-      },
-    ],
-  };
-}
-
 export const copy = {
-  thanksForAgreeing: ":handshake: Thanks, your promise is saved.",
-  alreadyAgreed: "You've already agreed to this one. Thanks.",
   notYours: "This form isn't yours. Wait for your own welcome message.",
   promiseRequired: "You have to promise to get in. Press Cancel if you don't want to.",
   promiseCopy: (r: PromiseRecord) =>

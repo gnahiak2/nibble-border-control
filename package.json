@@ -8,8 +8,7 @@
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "announce": "bun src/announce.ts"
+    "test": "bun test"
   },
   "dependencies": {
     "@slack/bolt": "^5.1.0",

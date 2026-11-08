@@ -1,11 +1,10 @@
 import { App, type BlockAction, type ButtonAction } from "@slack/bolt";
 import type { WebClient } from "@slack/web-api";
-import { agreedOnPost, buildPromise, channelPromiseText, readPromises, savePromise } from "./agreement";
+import { buildPromise, savePromise } from "./agreement";
 import { config } from "./config";
 import {
   ACTIONS,
   MODAL_CALLBACK,
-  channelPromiseMessage,
   copy,
   entryForm,
   readAnswers,
@@ -104,41 +103,6 @@ for (const [actionId, verdict] of [
     });
   });
 }
-
-// 5. "I agree" on the promise posted in the channel (see src/announce.ts)
-app.action<BlockAction<ButtonAction>>(ACTIONS.agreePost, async ({ ack, body, client }) => {
-  await ack();
-  const user = body.user.id;
-  const channel = body.channel!.id;
-  const postTs = body.message!.ts;
-  const say = (text: string) => client.chat.postEphemeral({ channel, user, text });
-
-  const before = await readPromises(config.promisesFile);
-  if (agreedOnPost(before, postTs).includes(user)) {
-    await say(copy.alreadyAgreed);
-    return;
-  }
-  const record = buildPromise({
-    slackUserId: user,
-    slackTeamId: body.team?.id,
-    name: body.user.name,
-    source: "channel_post",
-    postTs,
-    text: channelPromiseText(config.ownerId),
-  });
-  try {
-    await savePromise(config.promisesFile, record);
-  } catch (err) {
-    console.error("[border-control] could not save promise", err);
-    await say(copy.saveFailed(user));
-    return;
-  }
-  await say(copy.thanksForAgreeing);
-
-  // rebuild the who-agreed list from the log so it's right even if two people press at once
-  const agreed = agreedOnPost(await readPromises(config.promisesFile), postTs);
-  await client.chat.update({ channel, ts: postTs, ...channelPromiseMessage(config.ownerId, agreed) });
-});
 
 app.error(async (err) => {
   console.error("[border-control]", err);
