@@ -1,28 +1,22 @@
 {
   "name": "nibble-border-control",
-  "version": "0.1.0",
-  "description": "nibble, but border control — a slack bot that interviews new arrivals and stamps visas into the approved channel",
+  "version": "0.2.0",
+  "description": "a slack bot that greets new arrivals and makes them fill in an entry form",
   "type": "module",
-  "engines": {
-    "node": ">=20",
-    "bun": ">=1.1"
-  },
+  "private": true,
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/*.test.ts"
+    "test": "bun test"
   },
   "dependencies": {
-    "@slack/bolt": "^4.4.0",
-    "@slack/types": "^2.14.0",
-    "@slack/web-api": "^7.8.0",
-    "dotenv": "^16.4.5",
-    "install": "^0.13.0"
+    "@slack/bolt": "^5.1.0",
+    "@slack/types": "^3.3.0",
+    "@slack/web-api": "^8.3.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "bun-types": "^1.4.4",
+    "typescript": "^7.0.2"
   }
 }

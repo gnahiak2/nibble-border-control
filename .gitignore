@@ -1,4 +1,9 @@
 node_modules/
-dist/
 .env
-data/
+.env.*
+!.env.example
+
+# personal, never commit
+.claude/
+.remember/
+CLAUDE.local.md
