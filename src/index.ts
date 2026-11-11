@@ -52,7 +52,7 @@ app.action<BlockAction<ButtonAction>>(ACTIONS.start, async ({ ack, body, action,
   await client.views.open({ trigger_id: body.trigger_id, view: entryForm(origin) });
 });
 
-// 3. form submitted -> needs the signed agreement; record it, then review (or auto-approve with no owner)
+// 3. form submitted -> needs the promise; record it, then review (or auto-approve with no owner)
 app.view(MODAL_CALLBACK, async ({ ack, view, body, client }) => {
   const origin: Origin = JSON.parse(view.private_metadata);
   if (body.user.id !== origin.user) return ack();
@@ -65,7 +65,6 @@ app.view(MODAL_CALLBACK, async ({ ack, view, body, client }) => {
     slackUserId: body.user.id,
     slackTeamId: body.team?.id,
     name: answers.name,
-    signedName: answers.signedName,
   });
   try {
     await savePromise(config.promisesFile, record);
